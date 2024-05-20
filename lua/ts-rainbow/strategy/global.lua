@@ -15,10 +15,9 @@
    limitations under the License.
 --]]
 
-local Stack = require 'ts-rainbow.stack'
-local lib   = require 'ts-rainbow.lib'
-local ts    = vim.treesitter
-
+local Stack = require("ts-rainbow.stack")
+local lib = require("ts-rainbow.lib")
+local ts = vim.treesitter
 
 ---Strategy which highlights the entire buffer.
 local M = {}
@@ -26,9 +25,15 @@ local M = {}
 local function highlight_matches(bufnr, lang, matches, level)
 	local hlgroup = lib.hlgroup_at(level)
 	for _, match in matches:iter() do
-		for _, opening      in match.opening:iter()      do lib.highlight(bufnr, lang, opening,      hlgroup) end
-		for _, closing      in match.closing:iter()      do lib.highlight(bufnr, lang, closing,      hlgroup) end
-		for _, intermediate in match.intermediate:iter() do lib.highlight(bufnr, lang, intermediate, hlgroup) end
+		for _, opening in match.opening:iter() do
+			lib.highlight(bufnr, lang, opening, hlgroup)
+		end
+		for _, closing in match.closing:iter() do
+			lib.highlight(bufnr, lang, closing, hlgroup)
+		end
+		for _, intermediate in match.intermediate:iter() do
+			lib.highlight(bufnr, lang, intermediate, hlgroup)
+		end
 		highlight_matches(bufnr, lang, match.children, level + 1)
 	end
 end
@@ -39,7 +44,9 @@ end
 ---@param tree    table   TS tree
 ---@param lang    string  Language
 local function update_range(bufnr, changes, tree, lang)
-	if vim.fn.pumvisible() ~= 0 or not lang then return end
+	if vim.fn.pumvisible() ~= 0 or not lang then
+		return
+	end
 
 	local query = lib.get_query(lang)
 	local matches = Stack.new()
@@ -58,10 +65,12 @@ local function update_range(bufnr, changes, tree, lang)
 			}
 			for id, node in pairs(match) do
 				local name = query.captures[id]
-				if name == 'container' then
+				if name == "container" then
 					match_record.container = node
 				else
-					if match_record[name] then match_record[name]:push(node) end
+					if match_record[name] then
+						match_record[name]:push(node)
+					end
 				end
 			end
 
@@ -85,7 +94,7 @@ end
 local function full_update(bufnr, parser)
 	local function callback(tree, sub_parser)
 		local changes = {
-			{tree:root():range()}
+			{ tree:root():range() },
 		}
 		update_range(bufnr, changes, tree, sub_parser:lang())
 	end
@@ -95,15 +104,19 @@ end
 
 ---Sets up all the callbacks and performs an initial highlighting
 local function setup_parser(bufnr, parser)
-	parser:for_each_child(function(p, lang)
+	parser:children(function(p, lang)
 		-- Skip languages which are not supported, otherwise we get a
 		-- nil-reference error
-		if not lib.get_query(lang) then return end
-		p:register_cbs {
+		if not lib.get_query(lang) then
+			return
+		end
+		p:register_cbs({
 			on_changedtree = function(changes, tree)
 				-- HACK: As of Neovim v0.9.1 there is no way of unregistering a
 				-- callback, so we use this check to abort
-				if not lib.buffers[bufnr] then return end
+				if not lib.buffers[bufnr] then
+					return
+				end
 
 				-- If a line has been moved from another region it will still
 				-- carry with it the extmarks from the old region.  We need to
@@ -123,20 +136,18 @@ local function setup_parser(bufnr, parser)
 			on_child_added = function(child)
 				setup_parser(bufnr, child)
 			end,
-		}
+		})
 	end, true)
 
 	full_update(bufnr, parser)
 end
-
 
 function M.on_attach(bufnr, settings)
 	local parser = settings.parser
 	setup_parser(bufnr, parser)
 end
 
-function M.on_detach(bufnr)
-end
+function M.on_detach(bufnr) end
 
 return M
 
