@@ -14,10 +14,10 @@
    limitations under the License.
 --]]
 
-local Stack = require 'ts-rainbow.stack'
-local lib   = require 'ts-rainbow.lib'
-local api   = vim.api
-local ts    = vim.treesitter
+local Stack = require("ts-rainbow.stack")
+local lib = require("ts-rainbow.lib")
+local api = vim.api
+local ts = vim.treesitter
 
 ---Highlight strategy which highlights the sub-tree of the buffer which
 ---contains the cursor. Re-computes -highlights when the buffer contents change
@@ -32,21 +32,25 @@ local M = {}
 -- The document tree changes rarely, so there is no need to re-compute the
 -- match tree every time the cursor moves.
 
-
 -- Cache of match trees. We compute the match tree on every change, so that
 -- when the cursor moves without changing the tree we don't need to re-compute
 -- it.
 local match_trees = {}
 
 -- Reusable autogroup for events in this strategy.
-local augroup = api.nvim_create_augroup('TSRainbowLocalCursor', {})
-
+local augroup = api.nvim_create_augroup("TSRainbowLocalCursor", {})
 
 ---Highlights a single match with the given highlight group
 local function highlight_match(bufnr, lang, match, hlgroup)
-	for _, opening      in match.opening:iter()      do lib.highlight(bufnr, lang, opening,      hlgroup) end
-	for _, closing      in match.closing:iter()      do lib.highlight(bufnr, lang, closing,      hlgroup) end
-	for _, intermediate in match.intermediate:iter() do lib.highlight(bufnr, lang, intermediate, hlgroup) end
+	for _, opening in match.opening:iter() do
+		lib.highlight(bufnr, lang, opening, hlgroup)
+	end
+	for _, closing in match.closing:iter() do
+		lib.highlight(bufnr, lang, closing, hlgroup)
+	end
+	for _, intermediate in match.intermediate:iter() do
+		lib.highlight(bufnr, lang, intermediate, hlgroup)
+	end
 end
 
 ---Highlights all matches and their children on the stack of matches. All
@@ -67,9 +71,13 @@ end
 ---given container node.
 local function find_container(matches, container, level)
 	for _, match in matches:iter() do
-		if match.container == container then return match, level end
+		if match.container == container then
+			return match, level
+		end
 		local result, final_level = find_container(match.children, container, level + 1)
-		if result then return result, final_level end
+		if result then
+			return result, final_level
+		end
 	end
 end
 
@@ -92,10 +100,12 @@ local function build_match_tree(bufnr, changes, tree, lang)
 			}
 			for id, node in pairs(match) do
 				local name = query.captures[id]
-				if name == 'container' then
+				if name == "container" then
 					match_record.container = node
 				else
-					if match_record[name] then match_record[name]:push(node) end
+					if match_record[name] then
+						match_record[name]:push(node)
+					end
 				end
 			end
 
@@ -115,7 +125,9 @@ end
 
 local function update_local(bufnr, tree, lang)
 	local query = lib.get_query(lang)
-	if not query then return end
+	if not query then
+		return
+	end
 
 	-- Find the lowest container node which contains the cursor
 	local cursor_container
@@ -124,27 +136,35 @@ local function update_local(bufnr, tree, lang)
 		-- The order of traversal guarantees that the first match which
 		-- contains the cursor is also the lowest one.
 		for _, match in query:iter_matches(tree:root(), bufnr) do
-			if cursor_container then break end
+			if cursor_container then
+				break
+			end
 			for id, node in pairs(match) do
 				local name = query.captures[id]
-				if name == 'container' and ts.is_in_node_range(node, curpos[1] - 1, curpos[2]) then
+				if name == "container" and ts.is_in_node_range(node, curpos[1] - 1, curpos[2]) then
 					cursor_container = node
 					break
 				end
 			end
 		end
 	end
-	if not cursor_container then return end
+	if not cursor_container then
+		return
+	end
 
 	local matches = match_trees[bufnr][lang]
-	if not matches then return end
+	if not matches then
+		return
+	end
 
 	-- Find the correct container in the match tree
 	local cursor_match, level = find_container(matches, cursor_container, 1)
-	if not cursor_match then return end
+	if not cursor_match then
+		return
+	end
 
 	-- Highlight the container match and everything below
-	highlight_matches(bufnr, lang, Stack.new {cursor_match}, level)
+	highlight_matches(bufnr, lang, Stack.new({ cursor_match }), level)
 
 	-- Starting with the cursor match travel up and highlight every ancestor as
 	-- well
@@ -165,22 +185,28 @@ end
 
 ---Sets up all the callbacks and performs an initial highlighting
 local function setup_parser(bufnr, parser)
-	parser:for_each_child(function(p, lang)
+	parser:children(function(p, lang)
 		-- Skip languages which are not supported, otherwise we get a
 		-- nil-reference error
-		if not lib.get_query(lang) then return end
-		p:register_cbs {
+		if not lib.get_query(lang) then
+			return
+		end
+		p:register_cbs({
 			on_changedtree = function(_changes, tree)
 				-- HACK: As of Neovim v0.9.1 there is no way of unregistering a
 				-- callback, so we use this check to abort
-				if not lib.buffers[bufnr] then return end
+				if not lib.buffers[bufnr] then
+					return
+				end
 
-				if vim.fn.pumvisible() ~= 0 then return end
+				if vim.fn.pumvisible() ~= 0 then
+					return
+				end
 				-- Ideally we would only rebuild the parts of the tree that have changed,
 				-- but this doesn't work, so we will rebuild the entire tree
 				-- instead.
 				local fake_changes = {
-					{tree:root():range()}
+					{ tree:root():range() },
 				}
 				match_trees[bufnr][lang] = build_match_tree(bufnr, fake_changes, tree, lang)
 				-- Re-highlight after the change
@@ -191,7 +217,7 @@ local function setup_parser(bufnr, parser)
 			on_child_added = function(child)
 				setup_parser(bufnr, child)
 			end,
-		}
+		})
 	end, true)
 end
 
@@ -199,16 +225,16 @@ function M.on_attach(bufnr, settings)
 	local parser = settings.parser
 	setup_parser(bufnr, parser)
 
-	api.nvim_create_autocmd('CursorMoved', {
+	api.nvim_create_autocmd("CursorMoved", {
 		group = augroup,
 		buffer = bufnr,
 		callback = function(args)
 			lib.clear_namespace(bufnr, parser:lang())
-			parser:for_each_child(function(_, lang)
+			parser:children(function(_, lang)
 				lib.clear_namespace(bufnr, lang)
 			end)
 			local_rainbow(args.buf, parser)
-		end
+		end,
 	})
 
 	-- Build up the initial match tree
@@ -216,7 +242,7 @@ function M.on_attach(bufnr, settings)
 	parser:for_each_tree(function(tree, sub_parser)
 		local sub_lang = sub_parser:lang()
 		local changes = {
-			{tree:root():range()}
+			{ tree:root():range() },
 		}
 		match_trees[bufnr][sub_lang] = build_match_tree(bufnr, changes, tree, sub_lang)
 	end)
@@ -225,10 +251,10 @@ end
 
 function M.on_detach(bufnr)
 	-- Uninstall autocommand and delete cached match tree
-	api.nvim_clear_autocmds {
+	api.nvim_clear_autocmds({
 		buffer = bufnr,
 		group = augroup,
-	}
+	})
 	match_trees[bufnr] = nil
 end
 

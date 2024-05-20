@@ -17,10 +17,10 @@
 
 local parsers = require("nvim-treesitter.parsers")
 local configs = require("nvim-treesitter.configs")
-local lib     = require 'ts-rainbow.lib'
-local rb      = require 'ts-rainbow'
-local api     = vim.api
-local ts      = vim.treesitter
+local lib = require("ts-rainbow.lib")
+local rb = require("ts-rainbow")
+local api = vim.api
+local ts = vim.treesitter
 
 ---Internal implementation of the plugin.
 local M = {}
@@ -40,9 +40,9 @@ end
 ---@param lang string  The language of the buffer
 ---@return table strategy  The strategy table to use
 local function get_strategy(lang)
-	local settings = configs.get_module('rainbow').strategy
+	local settings = configs.get_module("rainbow").strategy
 	local setting = settings[lang] or settings[1] or rb.strategy.global
-	if type(setting) == 'function' then
+	if type(setting) == "function" then
 		return setting()
 	end
 	return setting
@@ -53,7 +53,9 @@ end
 --- @param lang string # Buffer language
 function M.attach(bufnr, lang)
 	local config = configs.get_module("rainbow")
-	if not config then return end
+	if not config then
+		return
+	end
 
 	local strat = get_strategy(lang)
 	-- Intentionally abort; the user has explicitly disabled rainbow delimiters
@@ -64,12 +66,14 @@ function M.attach(bufnr, lang)
 	end
 
 	local parser = ts.get_parser(bufnr, lang)
-	parser:register_cbs {
+	parser:register_cbs({
 		on_detach = function(bnr)
-			if not lib.buffers[bnr] then return end
+			if not lib.buffers[bnr] then
+				return
+			end
 			M.detach(bufnr)
-		end
-	}
+		end,
+	})
 
 	local settings = {
 		strategy = strat,
@@ -86,13 +90,15 @@ end
 --- @param bufnr number # Buffer number
 function M.detach(bufnr)
 	local config = configs.get_module("rainbow")
-	if not config then return end
+	if not config then
+		return
+	end
 
 	local strategy = lib.buffers[bufnr].strategy
 	local parser = lib.buffers[bufnr].parser
 
 	-- Clear all the namespaces for each language
-	parser:for_each_child(function(_, lang)
+	parser:children(function(_, lang)
 		lib.clear_namespace(bufnr, lang)
 	end, true)
 	-- Finally release all resources the parser is holding on to
